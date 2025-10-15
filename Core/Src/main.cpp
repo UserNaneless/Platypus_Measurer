@@ -37,6 +37,9 @@
 #define ACC_CONF 0x40
 #define ACC_SELF_TEST 0x6D
 #define ACC_POWER_CTL 0x7D
+#define ACCELEROMETER accelerometer();
+#define GYROSCOPE gyroscope();
+#define STOP stop();
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -266,9 +269,9 @@ int main(void) {
     /* USER CODE BEGIN WHILE */
     while (1) {
 
-        accelerometer();
+        ACCELEROMETER
         accelerometerBIT();
-        stop();
+        STOP
 
         /* USER CODE END WHILE */
 
