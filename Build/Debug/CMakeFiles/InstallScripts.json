@@ -1,8 +1,0 @@
-{
-	"InstallScripts" : 
-	[
-		"/home/naneless/Documents/GitHub/Platypus_Measurer/Build/Debug/cmake_install.cmake",
-		"/home/naneless/Documents/GitHub/Platypus_Measurer/Build/Debug/cmake/stm32cubemx/cmake_install.cmake"
-	],
-	"Parallel" : false
-}
