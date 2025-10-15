@@ -1,0 +1,6 @@
+IndentWidth: 4
+AccessModifierOffset: 4
+IndentAccessModifiers: true
+Cpp11BracedListStyle: false
+AllowShortFunctionsOnASingleLine: Empty
+ColumnLimit: 0 

@@ -1,0 +1,33 @@
+CMakeFiles/Platypus_Measurer.dir/Core/Src/stm32f1xx_hal_msp.c.obj: \
+ /home/naneless/Documents/GitHub/Platypus_Measurer/Core/Src/stm32f1xx_hal_msp.c \
+ /home/naneless/Documents/GitHub/Platypus_Measurer/cmake/stm32cubemx/../../Core/Inc/main.h \
+ /home/naneless/Documents/GitHub/Platypus_Measurer/cmake/stm32cubemx/../../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal.h \
+ /home/naneless/Documents/GitHub/Platypus_Measurer/cmake/stm32cubemx/../../Core/Inc/stm32f1xx_hal_conf.h \
+ /home/naneless/Documents/GitHub/Platypus_Measurer/cmake/stm32cubemx/../../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_rcc.h \
+ /home/naneless/Documents/GitHub/Platypus_Measurer/cmake/stm32cubemx/../../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_def.h \
+ /home/naneless/Documents/GitHub/Platypus_Measurer/cmake/stm32cubemx/../../Drivers/CMSIS/Device/ST/STM32F1xx/Include/stm32f1xx.h \
+ /home/naneless/Documents/GitHub/Platypus_Measurer/cmake/stm32cubemx/../../Drivers/CMSIS/Device/ST/STM32F1xx/Include/stm32f103xb.h \
+ /home/naneless/Documents/GitHub/Platypus_Measurer/cmake/stm32cubemx/../../Drivers/CMSIS/Include/core_cm3.h \
+ /usr/lib/gcc/arm-none-eabi/14.2.0/include/stdint.h \
+ /usr/arm-none-eabi/include/stdint.h \
+ /usr/arm-none-eabi/include/machine/_default_types.h \
+ /usr/arm-none-eabi/include/sys/features.h \
+ /usr/arm-none-eabi/include/_newlib_version.h \
+ /usr/arm-none-eabi/include/sys/_intsup.h \
+ /usr/arm-none-eabi/include/sys/_stdint.h \
+ /home/naneless/Documents/GitHub/Platypus_Measurer/cmake/stm32cubemx/../../Drivers/CMSIS/Include/cmsis_version.h \
+ /home/naneless/Documents/GitHub/Platypus_Measurer/cmake/stm32cubemx/../../Drivers/CMSIS/Include/cmsis_compiler.h \
+ /home/naneless/Documents/GitHub/Platypus_Measurer/cmake/stm32cubemx/../../Drivers/CMSIS/Include/cmsis_gcc.h \
+ /home/naneless/Documents/GitHub/Platypus_Measurer/cmake/stm32cubemx/../../Drivers/CMSIS/Device/ST/STM32F1xx/Include/system_stm32f1xx.h \
+ /usr/lib/gcc/arm-none-eabi/14.2.0/include/stddef.h \
+ /home/naneless/Documents/GitHub/Platypus_Measurer/cmake/stm32cubemx/../../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_rcc_ex.h \
+ /home/naneless/Documents/GitHub/Platypus_Measurer/cmake/stm32cubemx/../../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_gpio.h \
+ /home/naneless/Documents/GitHub/Platypus_Measurer/cmake/stm32cubemx/../../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_gpio_ex.h \
+ /home/naneless/Documents/GitHub/Platypus_Measurer/cmake/stm32cubemx/../../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_exti.h \
+ /home/naneless/Documents/GitHub/Platypus_Measurer/cmake/stm32cubemx/../../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_dma.h \
+ /home/naneless/Documents/GitHub/Platypus_Measurer/cmake/stm32cubemx/../../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_dma_ex.h \
+ /home/naneless/Documents/GitHub/Platypus_Measurer/cmake/stm32cubemx/../../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_cortex.h \
+ /home/naneless/Documents/GitHub/Platypus_Measurer/cmake/stm32cubemx/../../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_flash.h \
+ /home/naneless/Documents/GitHub/Platypus_Measurer/cmake/stm32cubemx/../../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_flash_ex.h \
+ /home/naneless/Documents/GitHub/Platypus_Measurer/cmake/stm32cubemx/../../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_pwr.h \
+ /home/naneless/Documents/GitHub/Platypus_Measurer/cmake/stm32cubemx/../../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_spi.h
