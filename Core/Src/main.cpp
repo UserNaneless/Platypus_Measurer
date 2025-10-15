@@ -18,6 +18,7 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "stm32f1xx_hal_spi.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -32,6 +33,10 @@
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
 #define wait HAL_Delay
+#define ACC_RANGE 0x41
+#define ACC_CONF 0x40
+#define ACC_SELF_TEST 0x6D
+#define ACC_POWER_CTL 0x7D
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -144,6 +149,67 @@ void stop() {
     HAL_GPIO_WritePin(B_GYROSCOPE_GPIO_Port, B_GYROSCOPE_Pin, GPIO_PIN_SET);
 }
 
+void writeToReg(uint8_t reg, uint8_t *value, size_t val_size) {
+    HAL_SPI_Transmit(&hspi1, &reg, 1, 1000);
+    HAL_SPI_Transmit(&hspi1, value, val_size, 1000);
+}
+
+void acceleromeretOn() {
+    writeToReg(ACC_POWER_CTL, (uint8_t *)0x04, 1);
+}
+
+void accelerometerBIT() {
+    //+-24g
+    writeToReg(ACC_RANGE, (uint8_t *)0x03, 1);
+
+    // 1.6khz
+    writeToReg(ACC_CONF, (uint8_t *)0xA7, 1);
+
+    wait(2);
+
+    // self test polarity +
+    writeToReg(ACC_SELF_TEST, (uint8_t *)0x0D, 1);
+
+    wait(50);
+
+    uint8_t tx = 0x12;
+    uint8_t positive[6] = { 0 };
+    uint8_t pRange = 0;
+    uint8_t range = ACC_RANGE;
+    uint8_t negative[6] = { 0 };
+    uint8_t nRange = 0;
+
+    HAL_SPI_TransmitReceive(&hspi1, &tx, positive, 6, 1000);
+
+    HAL_SPI_TransmitReceive(&hspi1, &range, &pRange, 1, 1000);
+
+    // self test polarity -
+    writeToReg(ACC_SELF_TEST, (uint8_t *)0x09, 1);
+
+    wait(50);
+
+    HAL_SPI_TransmitReceive(&hspi1, &tx, negative, 6, 1000);
+
+    HAL_SPI_TransmitReceive(&hspi1, &range, &nRange, 1, 1000);
+
+    // disable self test
+    writeToReg(ACC_SELF_TEST, (uint8_t *)0x00, 1);
+
+    int pAccel[3] = {
+        positive[1] * 256 + positive[0] / 32768 * 1000 * (1 << (pRange + 1)),
+        positive[3] * 256 + positive[2] / 32768 * 1000 * (1 << (pRange + 1)),
+        positive[5] * 256 + positive[4] / 32768 * 1000 * (1 << (pRange + 1)),
+    };
+
+    int nAccel[3] = {
+        negative[1] * 256 + negative[0] / 32768 * 1000 * (1 << (nRange + 1)),
+        negative[3] * 256 + negative[2] / 32768 * 1000 * (1 << (nRange + 1)),
+        negative[5] * 256 + negative[4] / 32768 * 1000 * (1 << (nRange + 1)),
+    };
+
+    wait(50);
+}
+
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -182,6 +248,8 @@ int main(void) {
     MX_SPI1_Init();
     /* USER CODE BEGIN 2 */
 
+    acceleromeretOn();
+
     LED_RGB_Data Led1_RGB = {
         .r = { .GPIO_Port = LED1_RGB_RED_GPIO_Port, .GPIO_Pin = LED1_RGB_RED_Pin },
         .g = { .GPIO_Port = LED1_RGB_GREEN_GPIO_Port, .GPIO_Pin = LED1_RGB_GREEN_Pin },
@@ -199,7 +267,7 @@ int main(void) {
     while (1) {
 
         accelerometer();
-        HAL_SPI_TransmitReceive(&hspi1, &tx, rx, 6, 1000);
+        accelerometerBIT();
         stop();
 
         /* USER CODE END WHILE */
