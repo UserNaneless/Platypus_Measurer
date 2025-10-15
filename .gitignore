@@ -1,0 +1,14 @@
+Build/*
+!Build/Debug/
+Build/Debug/*
+!Build/Debug/*.elf
+!Build/Debug/compile_commands.json
+
+!Build/Release/
+Build/Release/*
+!Build/Release/*.elf
+!Build/Release/compile_commands.json
+
+
+.vscode
+.cache
