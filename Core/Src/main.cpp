@@ -23,6 +23,8 @@
 /* USER CODE BEGIN Includes */
 #include "Led.h"
 #include "LedBase.h"
+#include "stm32f1xx_hal.h"
+#include "stm32f1xx_hal_gpio.h"
 #include <cstring>
 /* USER CODE END Includes */
 
@@ -62,6 +64,9 @@
 #define GYRO_RATE_Y_LSB 0x04
 #define GYRO_RATE_X_MSB 0x03
 #define GYRO_RATE_X_LSB 0x02
+
+#define ACCELEROMETER_FLAG 0xAA
+#define GYROSCOPE_FLAG 0xBB
 
 #define ACCELEROMETER_ON \
     HAL_GPIO_WritePin(B_ACCELEROMETER_GPIO_Port, B_ACCELEROMETER_Pin, GPIO_PIN_RESET);
@@ -235,7 +240,15 @@ void readFromReg_Gyro(uint8_t reg, uint8_t *data, size_t size) {
     readFromReg(reg, data, size);
 }
 
-void gyroscopeRead() {
+void getGyroData(uint8_t *data) {
+    readFromReg_Gyro(GYRO_RATE_X_LSB, data, 6);
+}
+
+void getAccData(uint8_t *data) {
+    readFromReg_Acc(ACC_X_LSB, data, 6);
+}
+
+void gyroscopeTest() {
     uint8_t data[6] = {};
     uint8_t chipID = readFromReg_Gyro(GYRO_CHIP_ID);
 
@@ -246,7 +259,7 @@ void gyroscopeRead() {
     float z = (int16_t)((data[5] << 8) | data[4]) / 16.384f;
 }
 
-void accelerometerRead() {
+void accelerometerTest() {
     uint8_t data[6] = {};
     uint8_t chipID_discard = readFromReg_Acc(ACC_CHIP_ID);
     uint8_t chipID = readFromReg_Acc(ACC_CHIP_ID);
@@ -273,6 +286,7 @@ class CAN {
         uint32_t mailbox;
 
         CAN_TxHeaderTypeDef txHeader;
+
 
     public:
         CAN(CAN_Init data) {
@@ -313,19 +327,24 @@ class CAN {
         bool compareCAN(CAN_HandleTypeDef *hcan) {
             return hcan == this->hcan;
         }
+
+
+
 };
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
-bool isPinSet(GPIO_TypeDef *port, uint8_t pin) {
+bool isPinSet(GPIO_TypeDef *port, uint16_t pin) {
     return HAL_GPIO_ReadPin(port, pin);
 }
 
 class Measurer {
     private:
         CAN *can;
+        uint32_t clock = 0;
+        uint32_t slice = 30;
 
     public:
         Measurer() {
@@ -335,14 +354,38 @@ class Measurer {
             this->can = can;
         }
 
-        uint32_t readAddr() {
+        uint8_t readAddr() {
             const bool addr[5] = {
-                isPinSet(GPIOB, GPIO_PIN_0),
-                isPinSet(GPIOB, GPIO_PIN_1),
-                isPinSet(GPIOB, GPIO_PIN_2),
-                isPinSet(GPIOB, GPIO_PIN_3),
-                isPinSet(GPIOB, GPIO_PIN_4),
+                !isPinSet(ADDR_0_GPIO_Port, ADDR_0_Pin),
+                !isPinSet(ADDR_1_GPIO_Port, ADDR_1_Pin),
+                !isPinSet(ADDR_2_GPIO_Port, ADDR_2_Pin),
+                !isPinSet(ADDR_3_GPIO_Port, ADDR_3_Pin),
+                !isPinSet(ADDR_4_GPIO_Port, ADDR_4_Pin),
             };
+
+            return (addr[0] << 0) | (addr[1] << 1) | (addr[2] << 2) | (addr[3] << 3) | (addr[4] << 4);
+        }
+
+        void sendData() {
+            uint8_t accel[7] = { ACCELEROMETER_FLAG, 0 };
+            uint8_t gyro[7] = { GYROSCOPE_FLAG, 0 };
+
+            getAccData(accel + 1);
+            getGyroData(gyro + 1);
+
+            can->SendMessage(accel, 7);
+            wait(10);
+            can->SendMessage(gyro, 7);
+        }
+
+        void tick() {
+            clock += HAL_GetTick();
+
+            if(clock % slice == 0) {
+                can_led->On();
+                sendData();
+                can_led->Off();
+            }
         }
 };
 
@@ -394,21 +437,24 @@ int main(void) {
         .GPIO_Pin = LED_Pin
     };
 
+    Measurer measurer;
+
     LED led(led_data);
     can_led = &led;
 
     CAN_Init can_data = {
         .hcan = &hcan,
-        .id = 0x123,
+        .id = measurer.readAddr(),
         .led = &led
     };
 
     CAN can(can_data);
 
+    measurer.init(&can);
+
     accelerometerOn();
     while (1) {
-        // accelerometerTest();
-        // gyroscopeBIT();
+        measurer.tick();
         /* USER CODE END WHILE */
 
         /* USER CODE BEGIN 3 */
@@ -466,11 +512,11 @@ static void MX_CAN_Init(void) {
 
     /* USER CODE END CAN_Init 1 */
     hcan.Instance = CAN1;
-    hcan.Init.Prescaler = 16;
+    hcan.Init.Prescaler = 6;
     hcan.Init.Mode = CAN_MODE_NORMAL;
     hcan.Init.SyncJumpWidth = CAN_SJW_1TQ;
-    hcan.Init.TimeSeg1 = CAN_BS1_1TQ;
-    hcan.Init.TimeSeg2 = CAN_BS2_1TQ;
+    hcan.Init.TimeSeg1 = CAN_BS1_10TQ;
+    hcan.Init.TimeSeg2 = CAN_BS2_3TQ;
     hcan.Init.TimeTriggeredMode = DISABLE;
     hcan.Init.AutoBusOff = DISABLE;
     hcan.Init.AutoWakeUp = DISABLE;
@@ -582,6 +628,12 @@ static void MX_GPIO_Init(void) {
     GPIO_InitStruct.Pull = GPIO_NOPULL;
     GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
     HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
+    /*Configure GPIO pin : ADDR_4_Pin */
+    GPIO_InitStruct.Pin = ADDR_4_Pin;
+    GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    HAL_GPIO_Init(ADDR_4_GPIO_Port, &GPIO_InitStruct);
 
     /* USER CODE BEGIN MX_GPIO_Init_2 */
 

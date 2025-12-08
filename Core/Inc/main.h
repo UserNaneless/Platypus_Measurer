@@ -77,6 +77,8 @@ void Error_Handler(void);
 #define B_ACCELEROMETER_GPIO_Port GPIOB
 #define B_GYROSCOPE_Pin GPIO_PIN_15
 #define B_GYROSCOPE_GPIO_Port GPIOB
+#define ADDR_4_Pin GPIO_PIN_5
+#define ADDR_4_GPIO_Port GPIOB
 
 /* USER CODE BEGIN Private defines */
 
