@@ -22,6 +22,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "CAN.h"
+#include "Informator.h"
 #include "Led.h"
 #include "LedBase.h"
 #include "LedRgb.h"
@@ -57,7 +58,6 @@
 #define ACC_SOFT_RESET 0x7E
 
 #define GYROSCOPE gyroscope();
-
 #define GYRO_CHIP_ID 0x00
 #define GYRO_RANGE 0x0F
 #define GYRO_BANDWIDTH 0x10
@@ -72,6 +72,8 @@
 
 #define ACCELEROMETER_FLAG 0xAA
 #define GYROSCOPE_FLAG 0xBB
+#define ERROR_FLAG 0xEE
+#define READY_FLAG 0xFF
 
 #define ACCELEROMETER_ON \
     HAL_GPIO_WritePin(B_ACCELEROMETER_GPIO_Port, B_ACCELEROMETER_Pin, GPIO_PIN_RESET);
@@ -83,10 +85,9 @@
 #define GYROSCOPE_OFF \
     HAL_GPIO_WritePin(B_GYROSCOPE_GPIO_Port, B_GYROSCOPE_Pin, GPIO_PIN_SET);
 
-#define CLOSE_OTHER_CS \
+#define CLOSE_OTHER_CS                                  \
     HAL_GPIO_WritePin(GPIOA, GPIO_PIN_3, GPIO_PIN_SET); \
     HAL_GPIO_WritePin(GPIOB, GPIO_PIN_10, GPIO_PIN_SET);
-
 
 #define STOP stop();
 /* USER CODE END PD */
@@ -114,8 +115,13 @@ static void MX_CAN_Init(void);
 
 LED *can_led = nullptr;
 LED_RGB *led = nullptr;
+CAN *pcan = nullptr;
+Informator *pInformator_can = nullptr;
+Informator *pInformator_led = nullptr;
 
 void Error_Stop() {
+    uint8_t data[1] = { ERROR_FLAG };
+    pcan->SendMessage(data, 1);
     led->setColor(Color::RED);
     Error_Handler();
 }
@@ -271,16 +277,16 @@ bool accelerometerBIT() {
         (int16_t)((negative[5] << 8) | negative[4]),
     };
 
-    int32_t pAccel[3] = {
-        (int32_t)(pAccel_16[0] / 32768 * 1000 * (1 << (pRange + 1))),
-        (int32_t)(pAccel_16[1] / 32768 * 1000 * (1 << (pRange + 1))),
-        (int32_t)(pAccel_16[2] / 32768 * 1000 * (1 << (pRange + 1))),
+    float pAccel[3] = {
+        (float)pAccel_16[0] / 32768.0f * 1000.0f * (1 << (pRange + 1)),
+        (float)pAccel_16[1] / 32768.0f * 1000.0f * (1 << (pRange + 1)),
+        (float)pAccel_16[2] / 32768.0f * 1000.0f * (1 << (pRange + 1)),
     };
 
-    int32_t nAccel[3] = {
-        (int32_t)(nAccel_16[0] / 32768 * 1000 * (1 << (nRange + 1))),
-        (int32_t)(nAccel_16[1] / 32768 * 1000 * (1 << (nRange + 1))),
-        (int32_t)(nAccel_16[2] / 32768 * 1000 * (1 << (nRange + 1))),
+    float nAccel[3] = {
+        (float)nAccel_16[0] / 32768.0f * 1000.0f * (1 << (nRange + 1)),
+        (float)nAccel_16[1] / 32768.0f * 1000.0f * (1 << (nRange + 1)),
+        (float)nAccel_16[2] / 32768.0f * 1000.0f * (1 << (nRange + 1)),
     };
 
     bool res = true;
@@ -343,7 +349,7 @@ bool accelerometerTest() {
     uint8_t chipID = readFromReg_Acc(ACC_CHIP_ID);
     // uint8_t pConf = readFromReg_Acc(ACC_PWR_CONF);
 
-    readFromReg_Acc(ACC_X_LSB, data, 6);
+    STATUS status = readFromReg_Acc(ACC_X_LSB, data, 6);
 
     uint8_t error = readFromReg_Acc(0x02);
 
@@ -355,10 +361,13 @@ bool accelerometerTest() {
     uint8_t fatal_code = error & 0b1;
 
     // if (chipID != 0x1E || error_code != 0 || fatal_code != 0)
-    // if (chipID != 0x1E)
-        // return false;
+    if (chipID != 0x1E || status != HAL_OK)
+        return false;
 
-    return accelerometerBIT();
+    led->setColor(Color::GREEN);
+    wait(50);
+    led->setColor(Color::OFF);
+    return true;
 }
 
 /* USER CODE END PFP */
@@ -386,6 +395,10 @@ class Measurer {
             this->can = can;
         }
 
+        uint32_t &getClock() {
+            return clock;
+        }
+
         uint8_t readAddr() {
             const bool addr[5] = {
                 !isPinSet(ADDR_0_GPIO_Port, ADDR_0_Pin),
@@ -408,15 +421,15 @@ class Measurer {
             can->SendMessage(accel, 7);
             wait(10);
             can->SendMessage(gyro, 7);
+            pushSuccess(pInformator_led);
         }
 
         void tick() {
-            clock += HAL_GetTick();
+            clock = HAL_GetTick();
 
             if (clock - lastSend >= slice) {
-                can_led->On();
+                pushInfo(pInformator_can);
                 sendData();
-                can_led->Off();
                 lastSend = clock;
             }
         }
@@ -424,8 +437,18 @@ class Measurer {
         void selfTest() {
             if (!gyroscopeTest() || !accelerometerTest())
                 Error_Stop();
+
+            STATUS status = writeToReg_Acc(ACC_CONF, 0b10011000); // normal 100hz
+            if (status != HAL_OK)
+                Error_Stop();
+
+            uint8_t data[1] = { READY_FLAG };
+            can->SendMessage(data, 1);
         }
 };
+
+void tester() {
+}
 
 /* USER CODE END 0 */
 
@@ -443,7 +466,6 @@ int main(void) {
 
     /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
     HAL_Init();
-
     /* USER CODE BEGIN Init */
 
     /* USER CODE END Init */
@@ -492,6 +514,12 @@ int main(void) {
     led = &Led1;
     led->setColor(Color::MAGENTA);
 
+    Informator Informator_can(can_led);
+    Informator Informator_led(led);
+
+    pInformator_can = &Informator_can;
+    pInformator_led = &Informator_led;
+
     STATUS status = HAL_OK;
     status = writeToReg_Gyro(GYRO_SOFTRESET, 0xB6);
     wait(100);
@@ -501,8 +529,6 @@ int main(void) {
 
     if (status != HAL_OK)
         Error_Stop();
-
-    led->Off();
 
     /* USER CODE END 2 */
 
@@ -516,6 +542,7 @@ int main(void) {
     };
 
     CAN can(can_data);
+    pcan = &can;
 
     measurer.init(&can);
 
@@ -525,6 +552,10 @@ int main(void) {
 
     while (1) {
         measurer.tick();
+
+        Informator_can.inform(measurer.getClock());
+        Informator_led.inform(measurer.getClock());
+
         /* USER CODE END WHILE */
 
         /* USER CODE BEGIN 3 */
@@ -623,7 +654,7 @@ static void MX_SPI1_Init(void) {
     hspi1.Init.CLKPolarity = SPI_POLARITY_LOW;
     hspi1.Init.CLKPhase = SPI_PHASE_1EDGE;
     hspi1.Init.NSS = SPI_NSS_SOFT;
-    hspi1.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_4;
+    hspi1.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_16;
     hspi1.Init.FirstBit = SPI_FIRSTBIT_MSB;
     hspi1.Init.TIMode = SPI_TIMODE_DISABLE;
     hspi1.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;

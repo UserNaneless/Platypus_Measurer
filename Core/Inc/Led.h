@@ -1,7 +1,7 @@
 #pragma once
 #include "LedBase.h"
 
-class LED : LED_Base {
+class LED : public LED_Base {
     private:
         LED_Color_Data led;
 
