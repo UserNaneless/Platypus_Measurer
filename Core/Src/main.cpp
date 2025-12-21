@@ -21,9 +21,12 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include "CAN.h"
 #include "Led.h"
 #include "LedBase.h"
+#include "LedRgb.h"
 #include "stm32f1xx_hal.h"
+#include "stm32f1xx_hal_def.h"
 #include "stm32f1xx_hal_gpio.h"
 #include <cstring>
 /* USER CODE END Includes */
@@ -36,6 +39,8 @@
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
 #define wait HAL_Delay
+#define STATUS HAL_StatusTypeDef
+
 #define ACCELEROMETER accelerometer();
 #define ACC_CHIP_ID 0x00
 #define ACC_RANGE 0x41
@@ -77,6 +82,12 @@
     HAL_GPIO_WritePin(B_GYROSCOPE_GPIO_Port, B_GYROSCOPE_Pin, GPIO_PIN_RESET);
 #define GYROSCOPE_OFF \
     HAL_GPIO_WritePin(B_GYROSCOPE_GPIO_Port, B_GYROSCOPE_Pin, GPIO_PIN_SET);
+
+#define CLOSE_OTHER_CS \
+    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_3, GPIO_PIN_SET); \
+    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_10, GPIO_PIN_SET);
+
+
 #define STOP stop();
 /* USER CODE END PD */
 
@@ -102,6 +113,12 @@ static void MX_CAN_Init(void);
 /* USER CODE BEGIN PFP */
 
 LED *can_led = nullptr;
+LED_RGB *led = nullptr;
+
+void Error_Stop() {
+    led->setColor(Color::RED);
+    Error_Handler();
+}
 
 void accelerometer() {
     ACCELEROMETER_ON;
@@ -118,12 +135,14 @@ void stop() {
     GYROSCOPE_OFF;
 }
 
-void writeToReg(uint8_t reg, uint8_t value) {
+STATUS writeToReg(uint8_t reg, uint8_t value) {
     uint8_t tx[2] = { reg, value };
     tx[0] &= 0x7F;
-    uint8_t rx[2];
-    HAL_SPI_TransmitReceive(&hspi1, tx, rx, 2, 1000);
+    STATUS status = HAL_OK;
+    status = HAL_SPI_Transmit(&hspi1, tx, 2, 1000);
     STOP;
+
+    return status;
 }
 
 uint8_t readFromReg(uint8_t reg) {
@@ -134,21 +153,24 @@ uint8_t readFromReg(uint8_t reg) {
     return rx[1];
 }
 
-void readFromReg(uint8_t reg, uint8_t *data, size_t size) {
+STATUS readFromReg(uint8_t reg, uint8_t *data, size_t size) {
+    STATUS status = HAL_OK;
     uint8_t tx[1 + size];
     tx[0] = (uint8_t)(reg | 0x80);
     for (size_t i = 1; i < size; i++) {
         tx[i] = 0;
     }
     uint8_t rx[1 + size];
-    HAL_SPI_TransmitReceive(&hspi1, tx, rx, size + 1, 1000);
+    status = HAL_SPI_TransmitReceive(&hspi1, tx, rx, size + 1, 1000);
     STOP;
     memcpy(data, rx + 1, size);
+
+    return status;
 }
 
-void writeToReg_Acc(uint8_t reg, uint8_t value) {
+STATUS writeToReg_Acc(uint8_t reg, uint8_t value) {
     ACCELEROMETER;
-    writeToReg(reg, value);
+    return writeToReg(reg, value);
 }
 
 uint8_t readFromReg_Acc(uint8_t reg) {
@@ -157,33 +179,49 @@ uint8_t readFromReg_Acc(uint8_t reg) {
     return val;
 }
 
-void readFromReg_Acc(uint8_t reg, uint8_t *data, size_t size) {
+STATUS readFromReg_Acc(uint8_t reg, uint8_t *data, size_t size) {
     ACCELEROMETER;
-    readFromReg(reg, data, size);
+    return readFromReg(reg, data, size);
 }
 
 void accelerometerOn() {
-    writeToReg_Acc(ACC_SOFT_RESET, 0xB6);
+    STATUS status = HAL_OK;
+
+    status = writeToReg_Acc(ACC_SOFT_RESET, 0xB6);
 
     wait(100);
 
-    writeToReg_Acc(ACC_PWR_CONF, 0x00);
-    writeToReg_Acc(ACC_POWER_CTL, 0x04);
+    status = writeToReg_Acc(ACC_PWR_CONF, 0x00);
+    status = writeToReg_Acc(ACC_POWER_CTL, 0x04);
 
     wait(100);
+
+    if (status != HAL_OK)
+        Error_Stop();
 }
 
-void accelerometerBIT() {
+bool accelerometerBIT() {
+    STATUS status = HAL_OK;
     //+-24g
-    writeToReg_Acc(ACC_RANGE, 0x03);
+    status = writeToReg_Acc(ACC_RANGE, 0x03);
+    if (status != HAL_OK)
+        Error_Stop();
+
+    uint8_t range = readFromReg_Acc(ACC_RANGE);
+    if (range != 0x03)
+        Error_Stop();
 
     // 1.6khz
-    writeToReg_Acc(ACC_CONF, 0xA7);
+    status = writeToReg_Acc(ACC_CONF, 0xA7);
+    if (status != HAL_OK)
+        Error_Stop();
 
     wait(2);
 
     // self test polarity +
-    writeToReg_Acc(ACC_SELF_TEST, 0x0D);
+    status = writeToReg_Acc(ACC_SELF_TEST, 0x0D);
+    if (status != HAL_OK)
+        Error_Stop();
 
     wait(50);
     uint8_t positive[6] = { 0 };
@@ -191,42 +229,76 @@ void accelerometerBIT() {
     uint8_t negative[6] = { 0 };
     uint8_t nRange = 0;
 
-    readFromReg_Acc(ACC_X_LSB, positive, 6);
+    status = readFromReg_Acc(ACC_X_LSB, positive, 6);
+    if (status != HAL_OK)
+        Error_Stop();
     // HAL_SPI_TransmitReceive(&hspi1, &tx, positive, 6, 1000);
 
     pRange = readFromReg_Acc(ACC_RANGE);
+    if (pRange != 0x03)
+        Error_Stop();
 
     // self test polarity -
-    writeToReg_Acc(ACC_SELF_TEST, 0x09);
+    status = writeToReg_Acc(ACC_SELF_TEST, 0x09);
+    if (status != HAL_OK)
+        Error_Stop();
 
     wait(50);
 
-    readFromReg_Acc(ACC_X_LSB, negative, 6);
+    status = readFromReg_Acc(ACC_X_LSB, negative, 6);
+    if (status != HAL_OK)
+        Error_Stop();
     // HAL_SPI_TransmitReceive(&hspi1, &tx, negative, 6, 1000);
 
     nRange = readFromReg_Acc(ACC_RANGE);
+    if (nRange != 0x03)
+        Error_Stop();
 
     // disable self test
-    writeToReg_Acc(ACC_SELF_TEST, 0x00);
+    status = writeToReg_Acc(ACC_SELF_TEST, 0x00);
+    if (status != HAL_OK)
+        Error_Stop();
 
-    int pAccel[3] = {
-        (int)((positive[1] << 8) | positive[0]),
-        (int)((positive[3] << 8) | positive[2]),
-        (int)((positive[5] << 8) | positive[4]),
+    int16_t pAccel_16[3] = {
+        (int16_t)((positive[1] << 8) | positive[0]),
+        (int16_t)((positive[3] << 8) | positive[2]),
+        (int16_t)((positive[5] << 8) | positive[4]),
     };
 
-    int nAccel[3] = {
-        (int)((negative[1] << 8) | negative[0]),
-        (int)((negative[3] << 8) | negative[2]),
-        (int)((negative[5] << 8) | negative[4]),
+    int16_t nAccel_16[3] = {
+        (int16_t)((negative[1] << 8) | negative[0]),
+        (int16_t)((negative[3] << 8) | negative[2]),
+        (int16_t)((negative[5] << 8) | negative[4]),
     };
+
+    int32_t pAccel[3] = {
+        (int32_t)(pAccel_16[0] / 32768 * 1000 * (1 << (pRange + 1))),
+        (int32_t)(pAccel_16[1] / 32768 * 1000 * (1 << (pRange + 1))),
+        (int32_t)(pAccel_16[2] / 32768 * 1000 * (1 << (pRange + 1))),
+    };
+
+    int32_t nAccel[3] = {
+        (int32_t)(nAccel_16[0] / 32768 * 1000 * (1 << (nRange + 1))),
+        (int32_t)(nAccel_16[1] / 32768 * 1000 * (1 << (nRange + 1))),
+        (int32_t)(nAccel_16[2] / 32768 * 1000 * (1 << (nRange + 1))),
+    };
+
+    bool res = true;
+
+    if (pAccel[0] - nAccel[0] < 1000 || pAccel[1] - nAccel[1] < 1000 || pAccel[2] - nAccel[2] < 500) {
+        res = false;
+    }
 
     wait(50);
+
+    led->Off();
+
+    return res;
 }
 
-void writeToReg_Gyro(uint8_t reg, uint8_t value) {
+STATUS writeToReg_Gyro(uint8_t reg, uint8_t value) {
     GYROSCOPE;
-    writeToReg(reg, value);
+    return writeToReg(reg, value);
 }
 
 uint8_t readFromReg_Gyro(uint8_t reg) {
@@ -235,20 +307,20 @@ uint8_t readFromReg_Gyro(uint8_t reg) {
     return val;
 }
 
-void readFromReg_Gyro(uint8_t reg, uint8_t *data, size_t size) {
+STATUS readFromReg_Gyro(uint8_t reg, uint8_t *data, size_t size) {
     GYROSCOPE;
-    readFromReg(reg, data, size);
+    return readFromReg(reg, data, size);
 }
 
-void getGyroData(uint8_t *data) {
-    readFromReg_Gyro(GYRO_RATE_X_LSB, data, 6);
+STATUS getGyroData(uint8_t *data) {
+    return readFromReg_Gyro(GYRO_RATE_X_LSB, data, 6);
 }
 
-void getAccData(uint8_t *data) {
-    readFromReg_Acc(ACC_X_LSB, data, 6);
+STATUS getAccData(uint8_t *data) {
+    return readFromReg_Acc(ACC_X_LSB, data, 6);
 }
 
-void gyroscopeTest() {
+bool gyroscopeTest() {
     uint8_t data[6] = {};
     uint8_t chipID = readFromReg_Gyro(GYRO_CHIP_ID);
 
@@ -257,13 +329,19 @@ void gyroscopeTest() {
     float x = (int16_t)((data[1] << 8) | data[0]) / 16.384f;
     float y = (int16_t)((data[3] << 8) | data[2]) / 16.384f;
     float z = (int16_t)((data[5] << 8) | data[4]) / 16.384f;
+
+    if (chipID != 0x0F || (x == 0 && y == 0 && z == 0))
+        return false;
+
+    return true;
 }
 
-void accelerometerTest() {
+bool accelerometerTest() {
+    led->setColor(Color::YELLOW);
     uint8_t data[6] = {};
-    uint8_t chipID_discard = readFromReg_Acc(ACC_CHIP_ID);
+    uint8_t _ = readFromReg_Acc(ACC_CHIP_ID);
     uint8_t chipID = readFromReg_Acc(ACC_CHIP_ID);
-    uint8_t pConf = readFromReg_Acc(ACC_PWR_CONF);
+    // uint8_t pConf = readFromReg_Acc(ACC_PWR_CONF);
 
     readFromReg_Acc(ACC_X_LSB, data, 6);
 
@@ -272,65 +350,17 @@ void accelerometerTest() {
     int16_t x = (int16_t)((data[1] << 8) | data[0]);
     int16_t y = (int16_t)((data[3] << 8) | data[2]);
     int16_t z = (int16_t)((data[5] << 8) | data[4]);
+
+    uint8_t error_code = (error >> 2) & 0b111;
+    uint8_t fatal_code = error & 0b1;
+
+    // if (chipID != 0x1E || error_code != 0 || fatal_code != 0)
+    // if (chipID != 0x1E)
+        // return false;
+
+    return accelerometerBIT();
 }
 
-typedef struct {
-        CAN_HandleTypeDef *hcan;
-        uint32_t id;
-        LED *led;
-} CAN_Init;
-
-class CAN {
-    private:
-        CAN_HandleTypeDef *hcan;
-        uint32_t mailbox;
-
-        CAN_TxHeaderTypeDef txHeader;
-
-
-    public:
-        CAN(CAN_Init data) {
-            this->hcan = data.hcan;
-            txHeader.StdId = data.id;
-            txHeader.IDE = CAN_ID_STD;
-            txHeader.RTR = CAN_RTR_DATA;
-
-            if (HAL_CAN_Start(this->hcan) == HAL_OK) {
-                data.led->setColor(Color::BLUE);
-                wait(500);
-                if (HAL_CAN_ActivateNotification(this->hcan, CAN_IT_RX_FIFO0_MSG_PENDING) != HAL_OK) {
-                    data.led->setColor(Color::RED);
-                    wait(1000);
-                };
-                data.led->setColor(Color::OFF);
-            }
-        }
-
-        bool GetMessage(CAN_RxHeaderTypeDef *rxHeader, uint8_t *data) {
-            if (HAL_CAN_GetRxMessage(hcan, CAN_RX_FIFO0, rxHeader, data) == HAL_OK) {
-                return true;
-            };
-
-            return false;
-        }
-
-        bool SendMessage(uint8_t *data, uint32_t dlc) {
-            if (HAL_CAN_GetTxMailboxesFreeLevel(hcan) == 0)
-                return false;
-
-            CAN_TxHeaderTypeDef txHeader;
-            txHeader.DLC = dlc;
-
-            return HAL_CAN_AddTxMessage(hcan, &txHeader, data, &mailbox) == HAL_OK;
-        }
-
-        bool compareCAN(CAN_HandleTypeDef *hcan) {
-            return hcan == this->hcan;
-        }
-
-
-
-};
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -345,6 +375,8 @@ class Measurer {
         CAN *can;
         uint32_t clock = 0;
         uint32_t slice = 30;
+
+        uint32_t lastSend = 0;
 
     public:
         Measurer() {
@@ -381,11 +413,17 @@ class Measurer {
         void tick() {
             clock += HAL_GetTick();
 
-            if(clock % slice == 0) {
+            if (clock - lastSend >= slice) {
                 can_led->On();
                 sendData();
                 can_led->Off();
+                lastSend = clock;
             }
+        }
+
+        void selfTest() {
+            if (!gyroscopeTest() || !accelerometerTest())
+                Error_Stop();
         }
 };
 
@@ -422,30 +460,59 @@ int main(void) {
     MX_SPI1_Init();
     MX_CAN_Init();
     /* USER CODE BEGIN 2 */
-    writeToReg_Gyro(GYRO_SOFTRESET, 0xB6);
-    wait(100);
-    writeToReg_Gyro(GYRO_RANGE, 0x01);
-    writeToReg_Gyro(GYRO_BANDWIDTH, 0x02);
-    writeToReg_Gyro(GYRO_LPM1, 0x00);
-    /* USER CODE END 2 */
 
-    /* Infinite loop */
-    /* USER CODE BEGIN WHILE */
+    CLOSE_OTHER_CS;
 
     LED_Color_Data led_data = {
         .GPIO_Port = LED_GPIO_Port,
         .GPIO_Pin = LED_Pin
     };
 
+    LED_RGB_Data LED1_RGB_Data = {
+        {
+            .GPIO_Port = LED1_RGB_RED_GPIO_Port,
+            .GPIO_Pin = LED1_RGB_RED_Pin,
+        },
+        {
+            .GPIO_Port = LED1_RGB_GREEN_GPIO_Port,
+            .GPIO_Pin = LED1_RGB_GREEN_Pin,
+        },
+        {
+            .GPIO_Port = LED1_RGB_BLUE_GPIO_Port,
+            .GPIO_Pin = LED1_RGB_BLUE_Pin,
+        },
+    };
+
     Measurer measurer;
 
-    LED led(led_data);
-    can_led = &led;
+    LED CAN_LED(led_data);
+    can_led = &CAN_LED;
+
+    LED_RGB Led1(LED1_RGB_Data);
+    led = &Led1;
+    led->setColor(Color::MAGENTA);
+
+    STATUS status = HAL_OK;
+    status = writeToReg_Gyro(GYRO_SOFTRESET, 0xB6);
+    wait(100);
+    status = writeToReg_Gyro(GYRO_RANGE, 0x01);
+    status = writeToReg_Gyro(GYRO_BANDWIDTH, 0x02);
+    status = writeToReg_Gyro(GYRO_LPM1, 0x00);
+
+    if (status != HAL_OK)
+        Error_Stop();
+
+    led->Off();
+
+    /* USER CODE END 2 */
+
+    /* Infinite loop */
+    /* USER CODE BEGIN WHILE */
 
     CAN_Init can_data = {
         .hcan = &hcan,
         .id = measurer.readAddr(),
-        .led = &led
+        .led = led
     };
 
     CAN can(can_data);
@@ -453,6 +520,9 @@ int main(void) {
     measurer.init(&can);
 
     accelerometerOn();
+
+    measurer.selfTest();
+
     while (1) {
         measurer.tick();
         /* USER CODE END WHILE */

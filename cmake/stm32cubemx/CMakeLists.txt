@@ -22,6 +22,8 @@ set(MX_Application_Src
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Src/main.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Src/Led.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Src/LedBase.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Src/LedRgb.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Src/CAN.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Src/stm32f1xx_it.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Src/stm32f1xx_hal_msp.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Src/sysmem.c

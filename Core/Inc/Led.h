@@ -1,3 +1,4 @@
+#pragma once
 #include "LedBase.h"
 
 class LED : LED_Base {
