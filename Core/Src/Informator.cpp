@@ -37,20 +37,20 @@ void Informator::inform(uint32_t clock) {
     if (signal.active) {
         if (signal.blinkable) {
 
-            if(signal.state) {
+            if (signal.state) {
                 led->setColor(signal.color);
-                if(clock - startTime > signal.duration) {
+                if (clock - startTime > signal.duration) {
                     signal.state = false;
                     startTime = clock;
                     signal.blink_count--;
                 }
             } else {
                 led->setColor(Color::OFF);
-                if(clock - startTime > signal.blink_off_duration) {
+                if (clock - startTime > signal.blink_off_duration) {
                     signal.state = true;
                     startTime = clock;
 
-                    if(signal.blink_count == 0) {
+                    if (signal.blink_count == 0) {
                         signal.active = false;
                         next();
                     }

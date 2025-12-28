@@ -22,6 +22,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "CAN.h"
+#include "Flags.h"
 #include "Informator.h"
 #include "Led.h"
 #include "LedBase.h"
@@ -118,6 +119,8 @@ LED_RGB *led = nullptr;
 CAN *pcan = nullptr;
 Informator *pInformator_can = nullptr;
 Informator *pInformator_led = nullptr;
+
+volatile bool informatorTick = false;
 
 void Error_Stop() {
     uint8_t data[1] = { ERROR_FLAG };
@@ -421,14 +424,14 @@ class Measurer {
             can->SendMessage(accel, 7);
             wait(10);
             can->SendMessage(gyro, 7);
-            pushSuccess(pInformator_led);
+            // pushSuccess(pInformator_led);
         }
 
         void tick() {
             clock = HAL_GetTick();
 
             if (clock - lastSend >= slice) {
-                pushInfo(pInformator_can);
+                // pushInfo(pInformator_can);
                 sendData();
                 lastSend = clock;
             }
@@ -448,6 +451,13 @@ class Measurer {
 };
 
 void tester() {
+}
+
+void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan) {
+    if (HAL_CAN_GetRxFifoFillLevel(hcan, CAN_RX_FIFO0) == 0)
+        return;
+
+    pushError(pInformator_led);
 }
 
 /* USER CODE END 0 */
@@ -551,10 +561,12 @@ int main(void) {
     measurer.selfTest();
 
     while (1) {
-        measurer.tick();
+        if (informatorTick) {
+            measurer.tick();
 
-        Informator_can.inform(measurer.getClock());
-        Informator_led.inform(measurer.getClock());
+            Informator_can.inform(measurer.getClock());
+            Informator_led.inform(measurer.getClock());
+        }
 
         /* USER CODE END WHILE */
 
@@ -629,6 +641,18 @@ static void MX_CAN_Init(void) {
     }
     /* USER CODE BEGIN CAN_Init 2 */
 
+    CAN_FilterTypeDef filterConfig;
+    filterConfig.FilterBank = 0;
+    filterConfig.FilterMode = CAN_FILTERMODE_IDMASK;
+    filterConfig.FilterScale = CAN_FILTERSCALE_32BIT;
+    filterConfig.FilterIdHigh = 0x0000;
+    filterConfig.FilterIdLow = 0x0000;
+    filterConfig.FilterMaskIdHigh = 0x0000;
+    filterConfig.FilterMaskIdLow = 0x0000;
+    filterConfig.FilterFIFOAssignment = CAN_RX_FIFO0;
+    filterConfig.FilterActivation = ENABLE;
+
+    HAL_CAN_ConfigFilter(&hcan, &filterConfig);
     /* USER CODE END CAN_Init 2 */
 }
 

@@ -1,4 +1,5 @@
 #include "CAN.h"
+#include "stm32f1xx_hal_def.h"
 
 CAN::CAN(CAN_Init data) {
     this->hcan = data.hcan;
@@ -30,10 +31,15 @@ bool CAN::SendMessage(uint8_t *data, uint32_t dlc) {
     if (HAL_CAN_GetTxMailboxesFreeLevel(hcan) == 0)
         return false;
 
-    CAN_TxHeaderTypeDef txHeader;
     txHeader.DLC = dlc;
 
-    return HAL_CAN_AddTxMessage(hcan, &txHeader, data, &mailbox) == HAL_OK;
+    HAL_StatusTypeDef status =  HAL_CAN_AddTxMessage(hcan, &txHeader, data, &mailbox);
+
+    if(status != HAL_OK) {
+        uint32_t error = HAL_CAN_GetError(hcan);
+        return false;
+    } 
+    return true;
 }
 
 bool CAN::compareCAN(CAN_HandleTypeDef *hcan) {
